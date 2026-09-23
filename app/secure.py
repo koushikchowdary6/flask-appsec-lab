@@ -12,24 +12,35 @@ from app import get_db
 bp = Blueprint("secure", __name__, url_prefix="/secure")
 
 
+@bp.after_request
+def add_security_headers(response):
+    """Add browser hardening to the secure half of the teaching lab.
+
+    These headers are deliberately scoped to /secure so students can compare
+    vulnerable and hardened responses as well as vulnerable and hardened code.
+    """
+    response.headers["Content-Security-Policy"] = "default-src 'self'; object-src 'none'; frame-ancestors 'none'"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Frame-Options"] = "DENY"
+    return response
+
+
 @bp.route("/login", methods=["GET", "POST"])
 def login() -> str:
-    """FIX for SQLi: parameterized query. User input is bound, never
-    concatenated, so ' OR '1'='1' is treated as a literal username."""
+    """FIX for SQLi: parameterized query. User input is bound, never concatenated."""
     if request.method == "GET":
         return _login_form("/secure/login")
 
     username = request.form.get("username", "")
     password = request.form.get("password", "")
     db = get_db()
-
     row = db.execute(
         "SELECT id, username FROM users WHERE username = ? AND password = ?",
         (username, password),
     ).fetchone()
-
     if row:
-        session.clear()  # avoid session fixation: new session on privilege change
+        session.clear()
         session["user_id"] = row["id"]
         session["username"] = row["username"]
         return f"Logged in as {row['username']} (id {row['id']})"
@@ -38,16 +49,14 @@ def login() -> str:
 
 @bp.route("/search")
 def search() -> str:
-    """FIX for XSS: escape() neutralizes HTML metacharacters before they
-    reach the response, so injected <script> renders as inert text."""
+    """FIX for XSS: escape HTML metacharacters before reflection."""
     q = request.args.get("q", "")
     return f"<p>Results for: {escape(q)}</p>"
 
 
 @bp.route("/note/<int:note_id>")
 def note(note_id: int) -> str:
-    """FIX for IDOR: the query is scoped to the caller's own user id, so a
-    note belonging to someone else simply isn't found."""
+    """FIX for IDOR: scope the query to the caller's own user id."""
     if "user_id" not in session:
         return "Please log in first", 401
     db = get_db()
@@ -56,8 +65,6 @@ def note(note_id: int) -> str:
         (note_id, session["user_id"]),
     ).fetchone()
     if row is None:
-        # Same response whether the note doesn't exist or isn't yours --
-        # don't leak which notes exist.
         return "No such note", 404
     return row["body"]
 
