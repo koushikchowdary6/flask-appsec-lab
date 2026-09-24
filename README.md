@@ -5,8 +5,8 @@
 A hands-on web-security lab built with Flask. Every vulnerability is shown
 **twice** — an exploitable `/vuln/...` route and a fixed `/secure/...` route
 with identical functionality — so the difference is visible in the code, not
-just described. An automated test suite proves each vulnerability is real on
-the `/vuln` side and actually closed on the `/secure` side.
+just described. An automated regression suite proves each vulnerability is
+real on the `/vuln` side and actually closed on the `/secure` side.
 
 > ⚠️ The `/vuln/*` routes are intentionally insecure. Run this only on
 > `127.0.0.1`. Never deploy it to a network anyone else can reach.
@@ -23,6 +23,24 @@ The secure login also demonstrates two extra hardening steps: `session.clear()`
 on login to prevent session fixation, and sourcing the Flask secret key from
 the environment instead of a hardcoded value.
 
+## Security regression coverage
+
+The repository keeps exploit behavior and remediation behavior in separate,
+readable tests rather than treating security as a manual demo:
+
+- `tests/test_sqli.py` verifies the injection payload succeeds against the
+  vulnerable login and is rejected by the parameterized secure path.
+- `tests/test_xss.py` checks raw reflected markup on the vulnerable route and
+  escaped output on the secure route.
+- `tests/test_idor.py` verifies cross-user note access is possible only through
+  the intentionally vulnerable handler.
+- `tests/test_security_headers.py` checks browser-facing hardening headers so
+  response-level protections cannot silently disappear during refactoring.
+
+This structure makes the lab useful as a small AppSec regression harness: a
+future change that reopens one of the demonstrated weaknesses should break CI
+instead of relying on a reviewer to notice it manually.
+
 ## Run it
 
 ```bash
@@ -37,9 +55,9 @@ python run.py            # serves on http://127.0.0.1:5000
 python -m pytest tests/ -v
 ```
 
-The suite (8 tests) asserts both directions for every class — for example,
+The suite asserts both directions for each demonstrated class — for example,
 that `' OR '1'='1' --` logs in on `/vuln/login` and is rejected on
-`/secure/login`.
+`/secure/login` — and separately covers security headers.
 
 ## Exploit walkthroughs
 
