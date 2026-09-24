@@ -66,7 +66,9 @@ def note(note_id: int) -> str:
     ).fetchone()
     if row is None:
         return "No such note", 404
-    return row["body"]
+    # Note bodies are data, not markup. Escaping here prevents stored content
+    # from becoming executable HTML if note creation is added to the lab later.
+    return str(escape(row["body"]))
 
 
 def _login_form(action: str) -> str:
