@@ -43,7 +43,8 @@ def login() -> str:
         session.clear()
         session["user_id"] = row["id"]
         session["username"] = row["username"]
-        return f"Logged in as {row['username']} (id {row['id']})"
+        # Database values are untrusted too: escape before interpolating into HTML.
+        return f"Logged in as {escape(row['username'])} (id {row['id']})"
     return "Invalid credentials", 401
 
 
