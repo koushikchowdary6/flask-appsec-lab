@@ -26,3 +26,23 @@ def test_secure_note_allows_own_read(client):
     resp = client.get("/secure/note/2")
     assert resp.status_code == 200
     assert b"diary" in resp.data
+
+
+def test_vulnerable_sqli_session_cannot_authorize_secure_note(client):
+    """A successful exploit in /vuln must never authenticate /secure."""
+    exploit = client.post(
+        "/vuln/login",
+        data={"username": "' OR '1'='1' --", "password": "anything"},
+    )
+    assert exploit.status_code == 200
+    assert b"Logged in as admin" in exploit.data
+    assert client.get("/vuln/note/1").status_code == 200
+    assert client.get("/secure/note/1").status_code == 401
+
+
+def test_secure_login_does_not_authorize_vulnerable_note(client):
+    """The two halves of the lab require their own authentication paths."""
+    login = _login(client, "/secure", "alice", "alice-password-1")
+    assert login.status_code == 200
+    assert client.get("/secure/note/2").status_code == 200
+    assert client.get("/vuln/note/2").status_code == 401
