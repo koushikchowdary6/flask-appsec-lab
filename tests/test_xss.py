@@ -28,15 +28,19 @@ def test_stored_markup_is_raw_on_vulnerable_route_but_escaped_on_secure_route(cl
         )
         db.commit()
 
-    login = client.post(
-        "/secure/login",
+    vulnerable_login = client.post(
+        "/vuln/login",
         data={"username": "admin", "password": "S3cure-Admin-Pw!"},
     )
-    assert login.status_code == 200
-
+    assert vulnerable_login.status_code == 200
     vulnerable = client.get("/vuln/note/99")
     assert stored_markup.encode() in vulnerable.data
 
+    secure_login = client.post(
+        "/secure/login",
+        data={"username": "admin", "password": "S3cure-Admin-Pw!"},
+    )
+    assert secure_login.status_code == 200
     secure = client.get("/secure/note/99")
     assert secure.status_code == 200
     assert stored_markup.encode() not in secure.data
