@@ -19,6 +19,12 @@ real on the `/vuln` side and actually closed on the `/secure` side.
 | Reflected XSS | `GET /vuln/search?q=` | `GET /secure/search?q=` | `markupsafe.escape()` on reflected input |
 | IDOR (broken access control) | `GET /vuln/note/<id>` | `GET /secure/note/<id>` | Ownership check scoping the query to the session user |
 
+**Authentication isolation:** The intentionally injectable /vuln login and the
+/secure login use separate session identities. Exploiting /vuln/login cannot
+unlock /secure/note/<id>, and signing in to /secure does not implicitly
+log in to /vuln. This prevents the teaching lab's vulnerable authentication
+path from undermining the fixed authorization example.
+
 The secure login also demonstrates two extra hardening steps: `session.clear()`
 on login to prevent session fixation, and sourcing the Flask secret key from
 the environment instead of a hardcoded value.
@@ -33,7 +39,8 @@ readable tests rather than treating security as a manual demo:
 - `tests/test_xss.py` checks raw reflected markup on the vulnerable route and
   escaped output on the secure route.
 - `tests/test_idor.py` verifies cross-user note access is possible only through
-  the intentionally vulnerable handler.
+  the intentionally vulnerable handler, and that /vuln authentication cannot
+  authorize /secure note access.
 - `tests/test_security_headers.py` checks browser-facing hardening headers so
   response-level protections cannot silently disappear during refactoring.
 
