@@ -41,8 +41,8 @@ def login() -> str:
     ).fetchone()
     if row:
         session.clear()
-        session["user_id"] = row["id"]
-        session["username"] = row["username"]
+        session["secure_user_id"] = row["id"]
+        session["secure_username"] = row["username"]
         # Database values are untrusted too: escape before interpolating into HTML.
         return f"Logged in as {escape(row['username'])} (id {row['id']})"
     return "Invalid credentials", 401
@@ -58,12 +58,12 @@ def search() -> str:
 @bp.route("/note/<int:note_id>")
 def note(note_id: int) -> str:
     """FIX for IDOR: scope the query to the caller's own user id."""
-    if "user_id" not in session:
+    if "secure_user_id" not in session:
         return "Please log in first", 401
     db = get_db()
     row = db.execute(
         "SELECT body FROM notes WHERE id = ? AND owner_id = ?",
-        (note_id, session["user_id"]),
+        (note_id, session["secure_user_id"]),
     ).fetchone()
     if row is None:
         return "No such note", 404
