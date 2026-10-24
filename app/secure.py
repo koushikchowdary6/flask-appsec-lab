@@ -23,6 +23,11 @@ def add_security_headers(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["X-Frame-Options"] = "DENY"
+    # Login responses and authenticated note bodies can contain sensitive
+    # information. Do not let browsers or shared intermediaries cache them.
+    # Leave the intentionally vulnerable half unchanged for comparison.
+    if request.endpoint in ("secure.login", "secure.note"):
+        response.headers["Cache-Control"] = "no-store"
     return response
 
 
