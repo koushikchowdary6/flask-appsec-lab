@@ -18,6 +18,7 @@ real on the `/vuln` side and actually closed on the `/secure` side.
 | SQL Injection | `POST /vuln/login` | `POST /secure/login` | Parameterized query instead of string interpolation |
 | Reflected XSS | `GET /vuln/search?q=` | `GET /secure/search?q=` | `markupsafe.escape()` on reflected input |
 | IDOR (broken access control) | `GET /vuln/note/<id>` | `GET /secure/note/<id>` | Ownership check scoping the query to the session user |
+| Cross-site request forgery (CSRF) | `POST /vuln/note/<id>/edit` | `POST /secure/note/<id>/edit` | Unpredictable session-bound form token checked with constant-time comparison |
 
 **Authentication isolation:** The intentionally injectable /vuln login and the
 /secure login use separate session identities. Exploiting /vuln/login cannot
@@ -25,7 +26,7 @@ unlock /secure/note/<id>, and signing in to /secure does not implicitly
 log in to /vuln. This prevents the teaching lab's vulnerable authentication
 path from undermining the fixed authorization example.
 
-**Sensitive-response caching:** The secure login and private-note routes
+**Sensitive-response caching:** The secure login, private-note, and note-edit routes
 return `Cache-Control: no-store` (including unsuccessful responses), reducing
 the risk of credentials or private notes being retained in browser or
 intermediary HTTP caches. The public search endpoint and intentionally
@@ -48,6 +49,7 @@ readable tests rather than treating security as a manual demo:
 - `tests/test_idor.py` verifies cross-user note access is possible only through
   the intentionally vulnerable handler, and that /vuln authentication cannot
   authorize /secure note access.
+- `tests/test_csrf.py` demonstrates a forged note edit on the vulnerable route, rejects missing/stale/cross-session tokens on the secure route, and verifies legitimate edits and ownership checks.
 - `tests/test_security_headers.py` checks browser-facing hardening headers so
   response-level protections cannot silently disappear during refactoring.
 
@@ -88,6 +90,16 @@ renders as inert text.
 to read the admin's private note — the handler never checks ownership.
 `/secure/note/1` returns 404 for alice because the query is scoped to her own
 user id.
+
+**CSRF.** Sign in as `alice` and submit `POST /vuln/note/2/edit`
+with `body=forged`: the edit succeeds without a form token, even if the
+request came from a different site. On the secure side, first visit
+`GET /secure/note/2/edit` to obtain the session-bound hidden
+`csrf_token`, then submit that token with the `body`. A missing,
+invalid, stale, or cross-session token returns 403 without updating the
+note. Both edit routes check note ownership so the paired example isolates
+CSRF from the separate IDOR demonstration. The vulnerable half is an
+educational simulation, not a safe service to expose.
 
 ## Demo credentials
 
