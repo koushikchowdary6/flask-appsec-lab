@@ -25,6 +25,13 @@ unlock /secure/note/<id>, and signing in to /secure does not implicitly
 log in to /vuln. This prevents the teaching lab's vulnerable authentication
 path from undermining the fixed authorization example.
 
+**Sensitive-response caching:** The secure login and private-note routes
+return `Cache-Control: no-store` (including unsuccessful responses), reducing
+the risk of credentials or private notes being retained in browser or
+intermediary HTTP caches. The public search endpoint and intentionally
+vulnerable demonstration routes remain unchanged for comparison. This is
+defense in depth, not a substitute for proper authorization.
+
 The secure login also demonstrates two extra hardening steps: `session.clear()`
 on login to prevent session fixation, and sourcing the Flask secret key from
 the environment instead of a hardcoded value.
