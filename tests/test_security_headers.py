@@ -20,3 +20,23 @@ def test_vulnerable_routes_do_not_inherit_secure_blueprint_headers(client):
     # inspect the response-level hardening difference as well as the code diff.
     assert "Content-Security-Policy" not in response.headers
     assert "X-Frame-Options" not in response.headers
+
+
+def test_secure_login_and_private_notes_are_not_cached(client):
+    # Both the login form and its authentication response can carry session
+    # information; private notes must not persist in intermediary caches.
+    for response in (
+        client.get("/secure/login"),
+        client.post("/secure/login", data={
+            "username": "alice", "password": "alice-password-1"
+        }),
+        client.get("/secure/note/2"),
+        client.get("/secure/note/1"),  # forbidden ownership: 404
+    ):
+        assert "no-store" in response.headers["Cache-Control"]
+
+
+def test_public_search_and_vulnerable_demo_do_not_gain_cache_policy(client):
+    assert "Cache-Control" not in client.get("/secure/search?q=hello").headers
+    assert "Cache-Control" not in client.get("/vuln/login").headers
+    assert "Cache-Control" not in client.get("/vuln/note/1").headers
