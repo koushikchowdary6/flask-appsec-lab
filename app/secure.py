@@ -4,6 +4,9 @@ Same features, same URLs under /secure, but each vulnerability is closed.
 """
 from __future__ import annotations
 
+import hmac
+import secrets
+
 from flask import Blueprint, request, session
 from markupsafe import escape
 
@@ -26,7 +29,7 @@ def add_security_headers(response):
     # Login responses and authenticated note bodies can contain sensitive
     # information. Do not let browsers or shared intermediaries cache them.
     # Leave the intentionally vulnerable half unchanged for comparison.
-    if request.endpoint in ("secure.login", "secure.note"):
+    if request.endpoint in ("secure.login", "secure.note", "secure.edit_note"):
         response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -75,6 +78,53 @@ def note(note_id: int) -> str:
     # Note bodies are data, not markup. Escaping here prevents stored content
     # from becoming executable HTML if note creation is added to the lab later.
     return str(escape(row["body"]))
+
+
+@bp.route("/note/<int:note_id>/edit", methods=["GET", "POST"])
+def edit_note(note_id: int):
+    """CSRF-safe note editing: authenticate, authorize, then verify a session token.
+
+    A random per-session token is placed only in the authenticated edit form.
+    A forged cross-site POST without that token cannot modify the note.
+    """
+    if "secure_user_id" not in session:
+        return "Please log in first", 401
+
+    db = get_db()
+    owner_id = session["secure_user_id"]
+    row = db.execute(
+        "SELECT body FROM notes WHERE id = ? AND owner_id = ?",
+        (note_id, owner_id),
+    ).fetchone()
+    if row is None:
+        return "No such note", 404
+
+    if request.method == "POST":
+        expected = session.get("secure_csrf_token")
+        supplied = request.form.get("csrf_token")
+        if (
+            not isinstance(expected, str)
+            or not isinstance(supplied, str)
+            or not hmac.compare_digest(expected, supplied)
+        ):
+            return "Invalid CSRF token", 403
+        db.execute(
+            "UPDATE notes SET body = ? WHERE id = ? AND owner_id = ?",
+            (request.form.get("body", ""), note_id, owner_id),
+        )
+        db.commit()
+        return "Note updated"
+
+    token = session.get("secure_csrf_token")
+    if not isinstance(token, str):
+        token = secrets.token_urlsafe(32)
+        session["secure_csrf_token"] = token
+    return (
+        f'<form method="post" action="/secure/note/{note_id}/edit">'
+        f'<input type="hidden" name="csrf_token" value="{escape(token)}">'
+        f'<textarea name="body">{escape(row["body"])}</textarea>'
+        '<button type="submit">Save</button></form>'
+    )
 
 
 def _login_form(action: str) -> str:

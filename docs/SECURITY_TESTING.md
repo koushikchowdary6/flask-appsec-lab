@@ -19,6 +19,7 @@ This structure avoids a common weakness in security demos where a README describ
 | SQL injection | User input changes SQL query semantics | Parameterized SQL binding |
 | Reflected XSS | Attacker-controlled markup is emitted as executable HTML | Output escaping with `markupsafe.escape()` |
 | IDOR / broken access control | Authenticated user reads another user's object by changing an identifier | Object lookup scoped to the authenticated owner |
+| CSRF on note editing | A logged-in user can be induced to POST an edit without a request token | Per-session unpredictable token, validated before updating the owned note |
 
 The login path also clears the existing session before establishing the authenticated session, reducing session-fixation risk, and reads the Flask secret from the environment instead of embedding a production-style secret in source.
 
@@ -28,13 +29,12 @@ A passing "secure" test alone can be misleading: the payload might be malformed 
 
 ## What this lab does not claim
 
-This is an educational local application, not a complete web application security assessment. The suite does not currently cover CSRF, SSRF, file upload abuse, deserialization, rate limiting, dependency vulnerabilities, browser CSP behavior, or production deployment hardening. It also does not replace DAST/SAST/SCA or manual penetration testing.
+This is an educational local application, not a complete web application security assessment. The suite does not currently cover SSRF, file upload abuse, deserialization, rate limiting, dependency vulnerabilities, browser CSP behavior, or production deployment hardening. The CSRF example uses session-bound form tokens but does not claim complete protection for every state-changing route or deployment configuration. It also does not replace DAST/SAST/SCA or manual penetration testing.
 
 ## Next useful extensions
 
 High-value additions would be:
 
-- CSRF vulnerable/secure route pairs with state-changing requests.
 - Stored XSS to complement reflected XSS.
 - Authentication rate limiting and lockout tests.
 - Security-header assertions for a production-oriented configuration.
