@@ -6,6 +6,7 @@ as a pair -- the diff between the two is the actual lesson.
 from __future__ import annotations
 
 from flask import Blueprint, request, session
+from markupsafe import escape
 
 from app import get_db
 
@@ -66,6 +67,41 @@ def note(note_id: int) -> str:
     if row is None:
         return "No such note", 404
     return row["body"]
+
+
+@bp.route("/note/<int:note_id>/edit", methods=["GET", "POST"])
+def edit_note(note_id: int):
+    """CSRF demo: a logged-in user's note can be edited without a request token.
+
+    Ownership is enforced here to isolate CSRF from the separate IDOR lesson.
+    A third-party page can still induce a state-changing POST using the
+    victim's existing session cookie.
+    """
+    if "user_id" not in session:
+        return "Please log in first", 401
+
+    db = get_db()
+    owner_id = session["user_id"]
+    row = db.execute(
+        "SELECT body FROM notes WHERE id = ? AND owner_id = ?",
+        (note_id, owner_id),
+    ).fetchone()
+    if row is None:
+        return "No such note", 404
+
+    if request.method == "POST":
+        db.execute(
+            "UPDATE notes SET body = ? WHERE id = ? AND owner_id = ?",
+            (request.form.get("body", ""), note_id, owner_id),
+        )
+        db.commit()
+        return "Note updated"
+
+    return (
+        f'<form method="post" action="/vuln/note/{note_id}/edit">'
+        f'<textarea name="body">{escape(row["body"])}</textarea>'
+        '<button type="submit">Save</button></form>'
+    )
 
 
 def _login_form(action: str) -> str:
