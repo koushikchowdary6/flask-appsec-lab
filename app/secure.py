@@ -45,6 +45,10 @@ def login() -> str:
     if request.method == "GET":
         return _login_form("/secure/login")
 
+    # Login is an unauthenticated endpoint. Bound form parsing before reading
+    # attacker-controlled credentials to avoid oversized request-body work.
+    # Keep the deliberately vulnerable comparison route unchanged.
+    request.max_content_length = MAX_SECURE_NOTE_BYTES
     username = request.form.get("username", "")
     password = request.form.get("password", "")
     db = get_db()
