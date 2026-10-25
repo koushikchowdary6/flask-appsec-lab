@@ -26,6 +26,13 @@ unlock /secure/note/<id>, and signing in to /secure does not implicitly
 log in to /vuln. This prevents the teaching lab's vulnerable authentication
 path from undermining the fixed authorization example.
 
+**Bounded secure note edits:** The hardened `/secure/note/<id>/edit` POST
+limits the total form body to 16 KiB before Werkzeug parses it and rejects
+note text longer than 10,000 characters with HTTP 413. Oversized requests
+do not overwrite existing notes. The `/vuln` teaching route intentionally
+retains its unbounded edit behavior for comparison; neither route is safe to
+expose outside localhost.
+
 **Sensitive-response caching:** The secure login, private-note, and note-edit routes
 return `Cache-Control: no-store` (including unsuccessful responses), reducing
 the risk of credentials or private notes being retained in browser or
