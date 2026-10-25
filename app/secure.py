@@ -14,6 +14,11 @@ from app import get_db
 
 bp = Blueprint("secure", __name__, url_prefix="/secure")
 
+# Limit both multipart/form payload size and stored note text on the hardened route.
+# The vulnerable route is intentionally left unchanged for side-by-side study.
+MAX_SECURE_NOTE_BYTES = 16_384
+MAX_SECURE_NOTE_CHARS = 10_000
+
 
 @bp.after_request
 def add_security_headers(response):
@@ -87,6 +92,11 @@ def edit_note(note_id: int):
     A random per-session token is placed only in the authenticated edit form.
     A forged cross-site POST without that token cannot modify the note.
     """
+    if request.method == "POST":
+        # Werkzeug checks this limit while parsing request.form, before the
+        # attacker-controlled body can be buffered in full.
+        request.max_content_length = MAX_SECURE_NOTE_BYTES
+
     if "secure_user_id" not in session:
         return "Please log in first", 401
 
@@ -108,9 +118,12 @@ def edit_note(note_id: int):
             or not hmac.compare_digest(expected, supplied)
         ):
             return "Invalid CSRF token", 403
+        body = request.form.get("body", "")
+        if len(body) > MAX_SECURE_NOTE_CHARS:
+            return "Note too long", 413
         db.execute(
             "UPDATE notes SET body = ? WHERE id = ? AND owner_id = ?",
-            (request.form.get("body", ""), note_id, owner_id),
+            (body, note_id, owner_id),
         )
         db.commit()
         return "Note updated"
