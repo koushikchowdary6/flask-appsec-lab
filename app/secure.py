@@ -18,6 +18,8 @@ bp = Blueprint("secure", __name__, url_prefix="/secure")
 # The vulnerable route is intentionally left unchanged for side-by-side study.
 MAX_SECURE_NOTE_BYTES = 16_384
 MAX_SECURE_NOTE_CHARS = 10_000
+# Reject oversized URLs before parsing query parameters or reflecting user input.
+MAX_SECURE_QUERY_BYTES = 4_096
 
 
 @bp.after_request
@@ -68,6 +70,10 @@ def login() -> str:
 @bp.route("/search")
 def search() -> str:
     """FIX for XSS: escape HTML metacharacters before reflection."""
+    # Check the raw query string first: parsing attacker-sized query parameters
+    # before enforcing a limit still consumes avoidable CPU and memory.
+    if len(request.query_string) > MAX_SECURE_QUERY_BYTES:
+        return "Search query too long", 414
     q = request.args.get("q", "")
     return f"<p>Results for: {escape(q)}</p>"
 
