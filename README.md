@@ -33,6 +33,11 @@ do not overwrite existing notes. The `/vuln` teaching route intentionally
 retains its unbounded edit behavior for comparison; neither route is safe to
 expose outside localhost.
 
+**Bounded secure search:** The hardened `/secure/search` checks the raw query
+string before URL parameter parsing and returns HTTP 414 above 4 KiB. This
+limits reflection and parsing work for oversized requests; the intentionally
+vulnerable `/vuln/search` remains unchanged for side-by-side comparison.
+
 **Sensitive-response caching:** The secure login, private-note, and note-edit routes
 return `Cache-Control: no-store` (including unsuccessful responses), reducing
 the risk of credentials or private notes being retained in browser or
