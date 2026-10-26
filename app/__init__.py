@@ -17,6 +17,7 @@ import sqlite3
 from pathlib import Path
 
 from flask import Flask, g
+from werkzeug.security import generate_password_hash
 
 DB_PATH = Path(__file__).parent / "lab.db"
 
@@ -43,7 +44,8 @@ def init_db(db_path: Path | None = None) -> None:
         CREATE TABLE users (
             id INTEGER PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
+            password TEXT NOT NULL,
+            password_hash TEXT
         );
         CREATE TABLE notes (
             id INTEGER PRIMARY KEY,
@@ -57,6 +59,16 @@ def init_db(db_path: Path | None = None) -> None:
             (1, 1, 'admin note: the vault code is 4815'),
             (2, 2, 'alice note: my diary entry, private');
         """
+    )
+    # Keep plaintext demo credentials solely for the intentionally vulnerable
+    # SQL-injection route. The secure route authenticates against independently
+    # salted password hashes and never compares a plaintext DB password.
+    conn.executemany(
+        "UPDATE users SET password_hash = ? WHERE username = ?",
+        [
+            (generate_password_hash("S3cure-Admin-Pw!"), "admin"),
+            (generate_password_hash("alice-password-1"), "alice"),
+        ],
     )
     conn.commit()
     conn.close()
