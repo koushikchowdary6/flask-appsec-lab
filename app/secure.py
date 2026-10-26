@@ -9,6 +9,7 @@ import secrets
 
 from flask import Blueprint, request, session
 from markupsafe import escape
+from werkzeug.security import check_password_hash
 
 from app import get_db
 
@@ -43,7 +44,7 @@ def add_security_headers(response):
 
 @bp.route("/login", methods=["GET", "POST"])
 def login() -> str:
-    """FIX for SQLi: parameterized query. User input is bound, never concatenated."""
+    """Parameterized lookup plus salted password-hash verification."""
     if request.method == "GET":
         return _login_form("/secure/login")
 
@@ -55,10 +56,10 @@ def login() -> str:
     password = request.form.get("password", "")
     db = get_db()
     row = db.execute(
-        "SELECT id, username FROM users WHERE username = ? AND password = ?",
-        (username, password),
+        "SELECT id, username, password_hash FROM users WHERE username = ?",
+        (username,),
     ).fetchone()
-    if row:
+    if row and row["password_hash"] and check_password_hash(row["password_hash"], password):
         session.clear()
         session["secure_user_id"] = row["id"]
         session["secure_username"] = row["username"]
