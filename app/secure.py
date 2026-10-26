@@ -9,7 +9,7 @@ import secrets
 
 from flask import Blueprint, request, session
 from markupsafe import escape
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import get_db
 
@@ -21,6 +21,11 @@ MAX_SECURE_NOTE_BYTES = 16_384
 MAX_SECURE_NOTE_CHARS = 10_000
 # Reject oversized URLs before parsing query parameters or reflecting user input.
 MAX_SECURE_QUERY_BYTES = 4_096
+
+# Unknown accounts still exercise the password KDF, reducing the large timing
+# difference between a missing username and a real user's stored hash.
+# This is best-effort timing hardening, not constant-time authentication.
+_DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(32))
 
 
 @bp.after_request
@@ -59,7 +64,16 @@ def login() -> str:
         "SELECT id, username, password_hash FROM users WHERE username = ?",
         (username,),
     ).fetchone()
-    if row and row["password_hash"] and check_password_hash(row["password_hash"], password):
+    stored_hash = row["password_hash"] if row else None
+    hash_to_check = stored_hash if isinstance(stored_hash, str) and stored_hash else _DUMMY_PASSWORD_HASH
+    try:
+        password_ok = check_password_hash(hash_to_check, password)
+    except (ValueError, TypeError):
+        # A malformed stored hash must fail closed, not turn login into a 500.
+        # Still perform the dummy KDF for roughly comparable work.
+        check_password_hash(_DUMMY_PASSWORD_HASH, password)
+        password_ok = False
+    if row and stored_hash and password_ok:
         session.clear()
         session["secure_user_id"] = row["id"]
         session["secure_username"] = row["username"]
