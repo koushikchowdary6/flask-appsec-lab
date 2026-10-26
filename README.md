@@ -52,6 +52,11 @@ still contains a plaintext `password` column used by `/vuln/login`.
 This deliberate teaching compromise means the application is **not**
 production-ready; do not reuse its database design or demo credentials.
 
+The secure login performs dummy password-hash verification for unknown users
+to reduce account-existence timing differences, and rejects malformed stored
+hashes with HTTP 401 instead of an unhandled error. This is **not** a claim
+of constant-time authentication or brute-force protection.
+
 The secure login also demonstrates session rotation with `session.clear()`
 and signed-cookie integrity. Without `FLASK_SECRET_KEY`, each app instance
 creates a fresh cryptographically random signing key instead of using a
