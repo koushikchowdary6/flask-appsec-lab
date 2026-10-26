@@ -15,7 +15,7 @@ real on the `/vuln` side and actually closed on the `/secure` side.
 
 | Class | Vulnerable route | Secure route | The fix |
 |---|---|---|---|
-| SQL Injection | `POST /vuln/login` | `POST /secure/login` | Parameterized query instead of string interpolation |
+| SQL Injection | `POST /vuln/login` | `POST /secure/login` | Parameterized username lookup and salted password-hash verification |
 | Reflected XSS | `GET /vuln/search?q=` | `GET /secure/search?q=` | `markupsafe.escape()` on reflected input |
 | IDOR (broken access control) | `GET /vuln/note/<id>` | `GET /secure/note/<id>` | Ownership check scoping the query to the session user |
 | Cross-site request forgery (CSRF) | `POST /vuln/note/<id>/edit` | `POST /secure/note/<id>/edit` | Unpredictable session-bound form token checked with constant-time comparison |
@@ -45,6 +45,13 @@ intermediary HTTP caches. The public search endpoint and intentionally
 vulnerable demonstration routes remain unchanged for comparison. This is
 defense in depth, not a substitute for proper authorization.
 
+**Password storage in the paired lab:** The secure login verifies a salted
+Werkzeug password hash rather than comparing a plaintext password in SQL.
+For the isolated SQL-injection demonstration only, the same local demo database
+still contains a plaintext `password` column used by `/vuln/login`.
+This deliberate teaching compromise means the application is **not**
+production-ready; do not reuse its database design or demo credentials.
+
 The secure login also demonstrates session rotation with `session.clear()`
 and signed-cookie integrity. Without `FLASK_SECRET_KEY`, each app instance
 creates a fresh cryptographically random signing key instead of using a
@@ -67,6 +74,7 @@ readable tests rather than treating security as a manual demo:
   the intentionally vulnerable handler, and that /vuln authentication cannot
   authorize /secure note access.
 - `tests/test_csrf.py` demonstrates a forged note edit on the vulnerable route, rejects missing/stale/cross-session tokens on the secure route, and verifies legitimate edits and ownership checks.
+- `tests/test_secure_password_hashing.py` verifies salted hashes, password-column isolation, and rejection of tampered hashes.
 - `tests/test_security_headers.py` checks browser-facing hardening headers so
   response-level protections cannot silently disappear during refactoring.
 
