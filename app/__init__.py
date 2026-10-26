@@ -11,6 +11,8 @@ application anywhere reachable from an untrusted network.
 """
 from __future__ import annotations
 
+import os
+import secrets
 import sqlite3
 from pathlib import Path
 
@@ -62,13 +64,12 @@ def init_db(db_path: Path | None = None) -> None:
 
 def create_app() -> Flask:
     app = Flask(__name__)
-    # Loaded from the environment in any real deployment; the fixed fallback
-    # here exists only so the lab runs out of the box. See secure_login for
-    # why a hardcoded, guessable secret ("12345" in the original) is itself a
-    # finding.
-    import os
-
-    app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-only-not-for-production")
+    # A predictable development fallback permits anyone who knows the source
+    # to forge Flask session cookies and bypass the secure note authorization.
+    # Use a fresh secret per app instance unless the operator supplies one.
+    # Set FLASK_SECRET_KEY to a high-entropy value when sessions must survive
+    # restarts. The intentionally vulnerable routes remain local-only.
+    app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_urlsafe(32)
 
     if not DB_PATH.exists():
         init_db()
