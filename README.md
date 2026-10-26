@@ -45,9 +45,14 @@ intermediary HTTP caches. The public search endpoint and intentionally
 vulnerable demonstration routes remain unchanged for comparison. This is
 defense in depth, not a substitute for proper authorization.
 
-The secure login also demonstrates two extra hardening steps: `session.clear()`
-on login to prevent session fixation, and sourcing the Flask secret key from
-the environment instead of a hardcoded value.
+The secure login also demonstrates session rotation with `session.clear()`
+and signed-cookie integrity. Without `FLASK_SECRET_KEY`, each app instance
+creates a fresh cryptographically random signing key instead of using a
+publicly known development fallback (which would allow session forgery).
+Set a strong, private `FLASK_SECRET_KEY` in the environment when sessions
+must persist across restarts or multiple workers. Otherwise, restarting the
+local lab invalidates existing sessions. This does **not** make the intentionally
+vulnerable routes safe to deploy.
 
 ## Security regression coverage
 
