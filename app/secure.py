@@ -148,8 +148,10 @@ def edit_note(note_id: int):
         # differently. Do not mutate the note on ambiguous requests.
         tokens = request.form.getlist("csrf_token")
         bodies = request.form.getlist("body")
-        if len(tokens) != 1 or len(bodies) != 1:
-            return "Ambiguous or missing edit fields", 400
+        if len(tokens) != 1:
+            return "Invalid CSRF token", 403
+        if len(bodies) != 1:
+            return "Ambiguous or missing note body", 400
         expected = session.get("secure_csrf_token")
         supplied = tokens[0]
         if (
