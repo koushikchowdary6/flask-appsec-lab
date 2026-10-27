@@ -28,8 +28,11 @@ path from undermining the fixed authorization example.
 
 **Bounded secure note edits:** The hardened `/secure/note/<id>/edit` POST
 limits the total form body to 16 KiB before Werkzeug parses it and rejects
-note text longer than 10,000 characters with HTTP 413. Oversized requests
-do not overwrite existing notes. The `/vuln` teaching route intentionally
+note text longer than 10,000 characters with HTTP 413. It also
+rejects duplicate CSRF tokens or duplicate note-body form parameters instead
+of silently selecting one value, and rejects a missing body. This avoids
+ambiguous HTTP parameter pollution on state-changing requests. Oversized or
+ambiguous requests do not overwrite existing notes. The `/vuln` teaching route intentionally
 retains its unbounded edit behavior for comparison; neither route is safe to
 expose outside localhost.
 

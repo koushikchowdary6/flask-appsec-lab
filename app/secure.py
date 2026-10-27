@@ -142,15 +142,25 @@ def edit_note(note_id: int):
         return "No such note", 404
 
     if request.method == "POST":
+        # HTTP parameter pollution can supply conflicting token/body values.
+        # Accept exactly one of each instead of silently choosing the first
+        # value, which different form parsers or middleware may interpret
+        # differently. Do not mutate the note on ambiguous requests.
+        tokens = request.form.getlist("csrf_token")
+        bodies = request.form.getlist("body")
+        if len(tokens) != 1:
+            return "Invalid CSRF token", 403
+        if len(bodies) != 1:
+            return "Ambiguous or missing note body", 400
         expected = session.get("secure_csrf_token")
-        supplied = request.form.get("csrf_token")
+        supplied = tokens[0]
         if (
             not isinstance(expected, str)
             or not isinstance(supplied, str)
             or not hmac.compare_digest(expected, supplied)
         ):
             return "Invalid CSRF token", 403
-        body = request.form.get("body", "")
+        body = bodies[0]
         if len(body) > MAX_SECURE_NOTE_CHARS:
             return "Note too long", 413
         db.execute(
