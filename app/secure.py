@@ -98,7 +98,13 @@ def search() -> str:
     # before enforcing a limit still consumes avoidable CPU and memory.
     if len(request.query_string) > MAX_SECURE_QUERY_BYTES:
         return "Search query too long", 414
-    q = request.args.get("q", "")
+    # Query parameter pollution is ambiguous across frameworks and proxies:
+    # some choose the first q, others the last. Reject duplicates before
+    # reflecting a value, even if both supplied values are identical.
+    queries = request.args.getlist("q")
+    if len(queries) > 1:
+        return "Ambiguous search query", 400
+    q = queries[0] if queries else ""
     return f"<p>Results for: {escape(q)}</p>"
 
 
