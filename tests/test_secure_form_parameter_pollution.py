@@ -18,20 +18,20 @@ def _login_and_token(client):
     return match.group(1)
 
 
-@pytest.mark.parametrize("fields", [
-    lambda token: [("csrf_token", token), ("csrf_token", "invalid"), ("body", "polluted")],
-    lambda token: [("csrf_token", "invalid"), ("csrf_token", token), ("body", "polluted")],
-    lambda token: [("csrf_token", token), ("body", "first"), ("body", "polluted")],
-    lambda token: [("csrf_token", token), ("body", "polluted"), ("body", "first")],
-    lambda token: [("csrf_token", token)],
-    lambda token: [("body", "polluted")],
+@pytest.mark.parametrize("fields, expected_status", [
+    (lambda token: [("csrf_token", token), ("csrf_token", "invalid"), ("body", "polluted")], 403),
+    (lambda token: [("csrf_token", "invalid"), ("csrf_token", token), ("body", "polluted")], 403),
+    (lambda token: [("csrf_token", token), ("body", "first"), ("body", "polluted")], 400),
+    (lambda token: [("csrf_token", token), ("body", "polluted"), ("body", "first")], 400),
+    (lambda token: [("csrf_token", token)], 400),
+    (lambda token: [("body", "polluted")], 403),
 ])
-def test_duplicate_or_missing_edit_parameters_fail_closed(client, fields):
+def test_duplicate_or_missing_edit_parameters_fail_closed(client, fields, expected_status):
     token = _login_and_token(client)
     response = client.post(
         "/secure/note/2/edit", data=MultiDict(fields(token)),
     )
-    assert response.status_code in (400, 403)
+    assert response.status_code == expected_status
     assert "no-store" in response.headers["Cache-Control"]
     assert b"diary entry" in client.get("/secure/note/2").data
 
