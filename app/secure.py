@@ -60,8 +60,14 @@ def login() -> str:
     # attacker-controlled credentials to avoid oversized request-body work.
     # Keep the deliberately vulnerable comparison route unchanged.
     request.max_content_length = MAX_SECURE_NOTE_BYTES
-    username = request.form.get("username", "")
-    password = request.form.get("password", "")
+    # Conflicting duplicate credential fields can be interpreted differently
+    # by proxies and form parsers. Fail closed before looking up an account or
+    # changing an existing authenticated session.
+    usernames = request.form.getlist("username")
+    passwords = request.form.getlist("password")
+    if len(usernames) != 1 or len(passwords) != 1:
+        return "Ambiguous or missing credentials", 400
+    username, password = usernames[0], passwords[0]
     db = get_db()
     row = db.execute(
         "SELECT id, username, password_hash FROM users WHERE username = ?",
