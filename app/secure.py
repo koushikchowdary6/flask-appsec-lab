@@ -21,6 +21,9 @@ MAX_SECURE_NOTE_BYTES = 16_384
 MAX_SECURE_NOTE_CHARS = 10_000
 # Reject oversized URLs before parsing query parameters or reflecting user input.
 MAX_SECURE_QUERY_BYTES = 4_096
+# SQLite INTEGER primary keys are signed 64-bit values. Flask accepts larger
+# Python integers in URL routes, but sqlite3 rejects binding them with OverflowError.
+MAX_SQLITE_ROW_ID = (1 << 63) - 1
 
 # Unknown accounts still exercise the password KDF, reducing the large timing
 # difference between a missing username and a real user's stored hash.
@@ -98,6 +101,8 @@ def note(note_id: int) -> str:
     """FIX for IDOR: scope the query to the caller's own user id."""
     if "secure_user_id" not in session:
         return "Please log in first", 401
+    if note_id > MAX_SQLITE_ROW_ID:
+        return "No such note", 404
     db = get_db()
     row = db.execute(
         "SELECT body FROM notes WHERE id = ? AND owner_id = ?",
@@ -124,6 +129,8 @@ def edit_note(note_id: int):
 
     if "secure_user_id" not in session:
         return "Please log in first", 401
+    if note_id > MAX_SQLITE_ROW_ID:
+        return "No such note", 404
 
     db = get_db()
     owner_id = session["secure_user_id"]
