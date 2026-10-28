@@ -44,8 +44,12 @@ Rejected edits preserve an unexpired token; request a fresh form after a
 successful edit or expiry. Regression tests cover cookie replay, multiple
 clients sharing a cookie, expiry, and invalid-body handling. This is
 server-enforced one-time form-token use, **not** session revocation: stolen
-authenticated cookies can still be used to request fresh forms. It is not
-a complete production CSRF or session-management system.
+authenticated cookies can still be used to request fresh forms. Existing
+local demo databases created before note-scoped tokens are upgraded at app
+startup: the old, unscoped token table is replaced, invalidating outstanding
+edit forms **without deleting users or notes**. Reopen the form to get a fresh
+token. This is not a general-purpose database migration framework or a
+complete production CSRF/session-management system.
 The `/vuln` teaching route intentionally retains its unbounded edit behavior
 for comparison; neither route is safe to expose outside localhost.
 

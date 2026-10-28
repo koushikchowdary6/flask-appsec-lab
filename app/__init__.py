@@ -82,6 +82,37 @@ def init_db(db_path: Path | None = None) -> None:
     conn.close()
 
 
+
+def ensure_note_scoped_csrf_schema(db_path: Path) -> None:
+    """Upgrade pre-note-binding demo databases without deleting users or notes.
+
+    Older versions stored one-time CSRF token digests per user, without the
+    target note. Those outstanding tokens cannot be safely migrated because
+    their intended note is unknown; invalidate them during the schema change.
+    """
+    conn = sqlite3.connect(db_path)
+    try:
+        columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(secure_csrf_tokens)")
+        }
+        if "note_id" not in columns:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("DROP TABLE IF EXISTS secure_csrf_tokens")
+            conn.execute(
+                "CREATE TABLE secure_csrf_tokens ("
+                "token_digest TEXT PRIMARY KEY, "
+                "user_id INTEGER NOT NULL, "
+                "note_id INTEGER NOT NULL, "
+                "created_at INTEGER NOT NULL)"
+            )
+            conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def create_app() -> Flask:
     app = Flask(__name__)
     # A predictable development fallback permits anyone who knows the source
@@ -93,6 +124,7 @@ def create_app() -> Flask:
 
     if not DB_PATH.exists():
         init_db()
+    ensure_note_scoped_csrf_schema(DB_PATH)
 
     @app.teardown_appcontext
     def _close_db(exc: object) -> None:
