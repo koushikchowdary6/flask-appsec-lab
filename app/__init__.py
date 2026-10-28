@@ -39,6 +39,7 @@ def init_db(db_path: Path | None = None) -> None:
     conn = sqlite3.connect(path)
     conn.executescript(
         """
+        DROP TABLE IF EXISTS secure_csrf_tokens;
         DROP TABLE IF EXISTS users;
         DROP TABLE IF EXISTS notes;
         CREATE TABLE users (
@@ -51,6 +52,12 @@ def init_db(db_path: Path | None = None) -> None:
             id INTEGER PRIMARY KEY,
             owner_id INTEGER NOT NULL,
             body TEXT NOT NULL
+        );
+        -- Only token digests are stored; consuming a row is atomic with an edit.
+        CREATE TABLE secure_csrf_tokens (
+            token_digest TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            created_at INTEGER NOT NULL
         );
         INSERT INTO users (id, username, password) VALUES
             (1, 'admin', 'S3cure-Admin-Pw!'),
