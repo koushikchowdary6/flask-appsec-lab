@@ -32,9 +32,13 @@ note text longer than 10,000 characters with HTTP 413. It also
 rejects duplicate CSRF tokens or duplicate note-body form parameters instead
 of silently selecting one value, and rejects a missing body. This avoids
 ambiguous HTTP parameter pollution on state-changing requests. Oversized or
-ambiguous requests do not overwrite existing notes. The `/vuln` teaching route intentionally
-retains its unbounded edit behavior for comparison; neither route is safe to
-expose outside localhost.
+ambiguous requests do not overwrite existing notes. A successful edit also
+consumes its CSRF token after the database commit: replaying an old POST
+returns 403 instead of overwriting newer content. Retrieve a fresh token from
+the edit form before the next authorized POST; rejected edits preserve the
+existing token. This is replay hardening, not complete CSRF protection.
+The `/vuln` teaching route intentionally retains its unbounded edit behavior
+for comparison; neither route is safe to expose outside localhost.
 
 **Bounded secure search:** The hardened `/secure/search` checks the raw query
 string before URL parameter parsing and returns HTTP 414 above 4 KiB. This

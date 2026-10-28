@@ -180,6 +180,10 @@ def edit_note(note_id: int):
             (body, note_id, owner_id),
         )
         db.commit()
+        # A successful edit consumes its CSRF token. Replaying an old POST
+        # must not overwrite a newer note; the next GET issues a fresh token.
+        # Do this only after commit so failed edits do not invalidate forms.
+        session.pop("secure_csrf_token", None)
         return "Note updated"
 
     token = session.get("secure_csrf_token")
