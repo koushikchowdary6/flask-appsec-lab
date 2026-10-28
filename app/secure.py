@@ -4,8 +4,10 @@ Same features, same URLs under /secure, but each vulnerability is closed.
 """
 from __future__ import annotations
 
+import hashlib
 import hmac
 import secrets
+import time
 
 from flask import Blueprint, request, session
 from markupsafe import escape
@@ -24,6 +26,13 @@ MAX_SECURE_QUERY_BYTES = 4_096
 # SQLite INTEGER primary keys are signed 64-bit values. Flask accepts larger
 # Python integers in URL routes, but sqlite3 rejects binding them with OverflowError.
 MAX_SQLITE_ROW_ID = (1 << 63) - 1
+# Abandoned edit forms expire; the database, not a replayable signed cookie,
+# determines whether a token is still valid and unused.
+CSRF_TOKEN_TTL_SECONDS = 24 * 60 * 60
+
+
+def _csrf_digest(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 # Unknown accounts still exercise the password KDF, reducing the large timing
 # difference between a missing username and a real user's stored hash.
@@ -129,10 +138,11 @@ def note(note_id: int) -> str:
 
 @bp.route("/note/<int:note_id>/edit", methods=["GET", "POST"])
 def edit_note(note_id: int):
-    """CSRF-safe note editing: authenticate, authorize, then verify a session token.
+    """Authenticate, authorize, then consume a database-backed CSRF token.
 
-    A random per-session token is placed only in the authenticated edit form.
-    A forged cross-site POST without that token cannot modify the note.
+    The browser cookie binds the form token to the session; SQLite records
+    whether that token is unused. An old signed cookie cannot restore a token
+    already consumed by a successful edit.
     """
     if request.method == "POST":
         # Werkzeug checks this limit while parsing request.form, before the
@@ -175,22 +185,47 @@ def edit_note(note_id: int):
         body = bodies[0]
         if len(body) > MAX_SECURE_NOTE_CHARS:
             return "Note too long", 413
+        # DELETE and UPDATE share one SQLite transaction. Concurrent/replayed
+        # requests cannot both consume the same token, even if they restore
+        # the original signed session cookie. Failed writes roll back both.
+        consumed = db.execute(
+            "DELETE FROM secure_csrf_tokens "
+            "WHERE token_digest = ? AND user_id = ? AND created_at >= ?",
+            (_csrf_digest(supplied), owner_id, int(time.time()) - CSRF_TOKEN_TTL_SECONDS),
+        ).rowcount
+        if consumed != 1:
+            db.rollback()
+            return "Invalid CSRF token", 403
         db.execute(
             "UPDATE notes SET body = ? WHERE id = ? AND owner_id = ?",
             (body, note_id, owner_id),
         )
         db.commit()
-        # Rotate the CSRF token in the browser's signed-cookie session after
-        # a successful edit. Stale forms fail with the updated browser cookie.
-        # This is not strong replay protection: an old signed session cookie
-        # can itself be replayed. Server-side nonce state would be required.
-        # Rotate only after commit so failed edits do not invalidate forms.
         session.pop("secure_csrf_token", None)
         return "Note updated"
 
     token = session.get("secure_csrf_token")
-    if not isinstance(token, str):
+    now = int(time.time())
+    valid = (
+        isinstance(token, str)
+        and db.execute(
+            "SELECT 1 FROM secure_csrf_tokens "
+            "WHERE token_digest = ? AND user_id = ? AND created_at >= ?",
+            (_csrf_digest(token), owner_id, now - CSRF_TOKEN_TTL_SECONDS),
+        ).fetchone() is not None
+    )
+    if not valid:
         token = secrets.token_urlsafe(32)
+        db.execute(
+            "DELETE FROM secure_csrf_tokens WHERE created_at < ?",
+            (now - CSRF_TOKEN_TTL_SECONDS,),
+        )
+        db.execute(
+            "INSERT INTO secure_csrf_tokens (token_digest, user_id, created_at) "
+            "VALUES (?, ?, ?)",
+            (_csrf_digest(token), owner_id, now),
+        )
+        db.commit()
         session["secure_csrf_token"] = token
     return (
         f'<form method="post" action="/secure/note/{note_id}/edit">'

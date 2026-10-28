@@ -32,14 +32,17 @@ note text longer than 10,000 characters with HTTP 413. It also
 rejects duplicate CSRF tokens or duplicate note-body form parameters instead
 of silently selecting one value, and rejects a missing body. This avoids
 ambiguous HTTP parameter pollution on state-changing requests. Oversized or
-ambiguous requests do not overwrite existing notes. A successful edit also
-rotates its CSRF token after the database commit. In a normal browser session,
-submitting a stale edit form after the updated cookie arrives returns 403;
-retrieve a fresh token for the next authorized POST. Rejected edits preserve
-the current token. **Important limit:** Flask's default session is a signed
-client-side cookie, so an attacker who can replay an earlier valid session
-cookie can also replay its old CSRF token. This is stale-form mitigation, not
-server-enforced one-time tokens or comprehensive replay/CSRF protection.
+ambiguous requests do not overwrite existing notes. The hardened edit form
+also stores a SHA-256 digest of its CSRF token in SQLite, scoped to the
+authenticated user and expiring after 24 hours. A successful edit consumes
+the database token and updates the note in **one transaction**, so replaying
+an older valid signed session cookie cannot repeat that particular edit.
+Rejected edits preserve an unexpired token; request a fresh form after a
+successful edit or expiry. Regression tests cover cookie replay, multiple
+clients sharing a cookie, expiry, and invalid-body handling. This is
+server-enforced one-time form-token use, **not** session revocation: stolen
+authenticated cookies can still be used to request fresh forms. It is not
+a complete production CSRF or session-management system.
 The `/vuln` teaching route intentionally retains its unbounded edit behavior
 for comparison; neither route is safe to expose outside localhost.
 
