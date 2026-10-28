@@ -180,9 +180,11 @@ def edit_note(note_id: int):
             (body, note_id, owner_id),
         )
         db.commit()
-        # A successful edit consumes its CSRF token. Replaying an old POST
-        # must not overwrite a newer note; the next GET issues a fresh token.
-        # Do this only after commit so failed edits do not invalidate forms.
+        # Rotate the CSRF token in the browser's signed-cookie session after
+        # a successful edit. Stale forms fail with the updated browser cookie.
+        # This is not strong replay protection: an old signed session cookie
+        # can itself be replayed. Server-side nonce state would be required.
+        # Rotate only after commit so failed edits do not invalidate forms.
         session.pop("secure_csrf_token", None)
         return "Note updated"
 
