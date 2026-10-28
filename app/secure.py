@@ -185,13 +185,14 @@ def edit_note(note_id: int):
         body = bodies[0]
         if len(body) > MAX_SECURE_NOTE_CHARS:
             return "Note too long", 413
-        # DELETE and UPDATE share one SQLite transaction. Concurrent/replayed
-        # requests cannot both consume the same token, even if they restore
-        # the original signed session cookie. Failed writes roll back both.
+        # DELETE and UPDATE share one SQLite transaction. Bind the nonce to
+        # the intended note as well as the user: a valid form for note A must
+        # never authorize an edit to another note owned by the same user.
+        # Concurrent/replayed requests cannot both consume the same token.
         consumed = db.execute(
             "DELETE FROM secure_csrf_tokens "
-            "WHERE token_digest = ? AND user_id = ? AND created_at >= ?",
-            (_csrf_digest(supplied), owner_id, int(time.time()) - CSRF_TOKEN_TTL_SECONDS),
+            "WHERE token_digest = ? AND user_id = ? AND note_id = ? AND created_at >= ?",
+            (_csrf_digest(supplied), owner_id, note_id, int(time.time()) - CSRF_TOKEN_TTL_SECONDS),
         ).rowcount
         if consumed != 1:
             db.rollback()
@@ -210,8 +211,8 @@ def edit_note(note_id: int):
         isinstance(token, str)
         and db.execute(
             "SELECT 1 FROM secure_csrf_tokens "
-            "WHERE token_digest = ? AND user_id = ? AND created_at >= ?",
-            (_csrf_digest(token), owner_id, now - CSRF_TOKEN_TTL_SECONDS),
+            "WHERE token_digest = ? AND user_id = ? AND note_id = ? AND created_at >= ?",
+            (_csrf_digest(token), owner_id, note_id, now - CSRF_TOKEN_TTL_SECONDS),
         ).fetchone() is not None
     )
     if not valid:
@@ -221,9 +222,9 @@ def edit_note(note_id: int):
             (now - CSRF_TOKEN_TTL_SECONDS,),
         )
         db.execute(
-            "INSERT INTO secure_csrf_tokens (token_digest, user_id, created_at) "
-            "VALUES (?, ?, ?)",
-            (_csrf_digest(token), owner_id, now),
+            "INSERT INTO secure_csrf_tokens (token_digest, user_id, note_id, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (_csrf_digest(token), owner_id, note_id, now),
         )
         db.commit()
         session["secure_csrf_token"] = token

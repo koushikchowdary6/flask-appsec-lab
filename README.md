@@ -34,8 +34,11 @@ of silently selecting one value, and rejects a missing body. This avoids
 ambiguous HTTP parameter pollution on state-changing requests. Oversized or
 ambiguous requests do not overwrite existing notes. The hardened edit form
 also stores a SHA-256 digest of its CSRF token in SQLite, scoped to the
-authenticated user and expiring after 24 hours. A successful edit consumes
-the database token and updates the note in **one transaction**, so replaying
+authenticated user **and target note**, expiring after 24 hours. A token
+issued for one owned note cannot authorize edits to a different owned note.
+Opening a form for another note issues a fresh session token. A successful
+edit consumes the database token and updates the note in **one transaction**,
+so replaying
 an older valid signed session cookie cannot repeat that particular edit.
 Rejected edits preserve an unexpired token; request a fresh form after a
 successful edit or expiry. Regression tests cover cookie replay, multiple
