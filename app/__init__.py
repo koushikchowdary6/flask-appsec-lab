@@ -57,6 +57,7 @@ def init_db(db_path: Path | None = None) -> None:
         CREATE TABLE secure_csrf_tokens (
             token_digest TEXT PRIMARY KEY,
             user_id INTEGER NOT NULL,
+            note_id INTEGER NOT NULL,
             created_at INTEGER NOT NULL
         );
         INSERT INTO users (id, username, password) VALUES
