@@ -21,7 +21,7 @@ def _login(client):
     assert response.status_code == 200
 
 
-def test_successful_edit_consumes_token_and_replay_cannot_overwrite_note(client):
+def test_normal_browser_session_rejects_stale_token_after_successful_edit(client):
     _login(client)
     first_token = _token(client)
     assert client.post(

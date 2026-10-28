@@ -33,10 +33,13 @@ rejects duplicate CSRF tokens or duplicate note-body form parameters instead
 of silently selecting one value, and rejects a missing body. This avoids
 ambiguous HTTP parameter pollution on state-changing requests. Oversized or
 ambiguous requests do not overwrite existing notes. A successful edit also
-consumes its CSRF token after the database commit: replaying an old POST
-returns 403 instead of overwriting newer content. Retrieve a fresh token from
-the edit form before the next authorized POST; rejected edits preserve the
-existing token. This is replay hardening, not complete CSRF protection.
+rotates its CSRF token after the database commit. In a normal browser session,
+submitting a stale edit form after the updated cookie arrives returns 403;
+retrieve a fresh token for the next authorized POST. Rejected edits preserve
+the current token. **Important limit:** Flask's default session is a signed
+client-side cookie, so an attacker who can replay an earlier valid session
+cookie can also replay its old CSRF token. This is stale-form mitigation, not
+server-enforced one-time tokens or comprehensive replay/CSRF protection.
 The `/vuln` teaching route intentionally retains its unbounded edit behavior
 for comparison; neither route is safe to expose outside localhost.
 
