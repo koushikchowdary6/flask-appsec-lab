@@ -194,11 +194,13 @@ def edit_note(note_id: int):
         # DELETE and UPDATE share one SQLite transaction. Bind the nonce to
         # the intended note as well as the user: a valid form for note A must
         # never authorize an edit to another note owned by the same user.
-        # Concurrent/replayed requests cannot both consume the same token.
+        # Concurrent/replayed requests cannot both consume the same token.\n        # Bound both ends of the validity window: a clock-skewed or corrupt\n        # future timestamp must not make a token valid indefinitely.
+        now = int(time.time())
         consumed = db.execute(
             "DELETE FROM secure_csrf_tokens "
-            "WHERE token_digest = ? AND user_id = ? AND note_id = ? AND created_at >= ?",
-            (_csrf_digest(supplied), owner_id, note_id, int(time.time()) - CSRF_TOKEN_TTL_SECONDS),
+            "WHERE token_digest = ? AND user_id = ? AND note_id = ? "
+            "AND created_at BETWEEN ? AND ?",
+            (_csrf_digest(supplied), owner_id, note_id, now - CSRF_TOKEN_TTL_SECONDS, now),
         ).rowcount
         if consumed != 1:
             db.rollback()
@@ -217,15 +219,16 @@ def edit_note(note_id: int):
         isinstance(token, str)
         and db.execute(
             "SELECT 1 FROM secure_csrf_tokens "
-            "WHERE token_digest = ? AND user_id = ? AND note_id = ? AND created_at >= ?",
-            (_csrf_digest(token), owner_id, note_id, now - CSRF_TOKEN_TTL_SECONDS),
+            "WHERE token_digest = ? AND user_id = ? AND note_id = ? "
+            "AND created_at BETWEEN ? AND ?",
+            (_csrf_digest(token), owner_id, note_id, now - CSRF_TOKEN_TTL_SECONDS, now),
         ).fetchone() is not None
     )
     if not valid:
         token = secrets.token_urlsafe(32)
         db.execute(
-            "DELETE FROM secure_csrf_tokens WHERE created_at < ?",
-            (now - CSRF_TOKEN_TTL_SECONDS,),
+            "DELETE FROM secure_csrf_tokens WHERE created_at < ? OR created_at > ?",
+            (now - CSRF_TOKEN_TTL_SECONDS, now),
         )
         db.execute(
             "INSERT INTO secure_csrf_tokens (token_digest, user_id, note_id, created_at) "
