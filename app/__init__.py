@@ -92,10 +92,21 @@ def ensure_note_scoped_csrf_schema(db_path: Path) -> None:
     """
     conn = sqlite3.connect(db_path)
     try:
-        columns = {
-            row[1] for row in conn.execute("PRAGMA table_info(secure_csrf_tokens)")
+        # Checking only for note_id misses partially migrated tables whose
+        # missing/nullable fields break token issuance or one-time consumption.
+        # The table holds only disposable token digests; recreate it if the
+        # schema differs, preserving users and notes in other tables.
+        expected_columns = {
+            "token_digest": ("TEXT", 0, 1),
+            "user_id": ("INTEGER", 1, 0),
+            "note_id": ("INTEGER", 1, 0),
+            "created_at": ("INTEGER", 1, 0),
         }
-        if "note_id" not in columns:
+        columns = {
+            row[1]: (row[2].upper(), row[3], row[5])
+            for row in conn.execute("PRAGMA table_info(secure_csrf_tokens)")
+        }
+        if columns != expected_columns:
             conn.execute("BEGIN IMMEDIATE")
             conn.execute("DROP TABLE IF EXISTS secure_csrf_tokens")
             conn.execute(
