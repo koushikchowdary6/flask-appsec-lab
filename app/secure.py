@@ -47,7 +47,13 @@ def add_security_headers(response):
     These headers are deliberately scoped to /secure so students can compare
     vulnerable and hardened responses as well as vulnerable and hardened code.
     """
-    response.headers["Content-Security-Policy"] = "default-src 'self'; object-src 'none'; frame-ancestors 'none'"
+    # Form submissions and HTML base URLs are separate CSP controls. Keep
+    # a future markup-injection bug from redirecting secure login/note forms
+    # to an attacker endpoint or rewriting relative URLs.
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; object-src 'none'; frame-ancestors 'none'; "
+        "form-action 'self'; base-uri 'none'"
+    )
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["X-Frame-Options"] = "DENY"
