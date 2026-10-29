@@ -11,6 +11,8 @@ def test_secure_routes_set_browser_hardening_headers(client):
     assert "default-src 'self'" in csp
     assert "object-src 'none'" in csp
     assert "frame-ancestors 'none'" in csp
+    assert "form-action 'self'" in csp
+    assert "base-uri 'none'" in csp
 
 
 def test_vulnerable_routes_do_not_inherit_secure_blueprint_headers(client):
@@ -40,3 +42,17 @@ def test_public_search_and_vulnerable_demo_do_not_gain_cache_policy(client):
     assert "Cache-Control" not in client.get("/secure/search?q=hello").headers
     assert "Cache-Control" not in client.get("/vuln/login").headers
     assert "Cache-Control" not in client.get("/vuln/note/1").headers
+
+
+def test_secure_form_csp_is_enforced_on_login_and_edit_errors(client):
+    # Browser form-target restrictions must survive both successful forms
+    # and rejected requests, not only the public search demonstration.
+    for response in (
+        client.get("/secure/login"),
+        client.post("/secure/login", data={"username": "nobody", "password": "bad"}),
+        client.get("/secure/note/2/edit"),  # unauthenticated: 401
+    ):
+        csp = response.headers["Content-Security-Policy"]
+        assert "form-action 'self'" in csp
+        assert "base-uri 'none'" in csp
+        assert response.headers["X-Frame-Options"] == "DENY"

@@ -58,6 +58,15 @@ string before URL parameter parsing and returns HTTP 414 above 4 KiB. This
 limits reflection and parsing work for oversized requests; the intentionally
 vulnerable `/vuln/search` remains unchanged for side-by-side comparison.
 
+**Secure form-target hardening:** The secure routes send a Content Security
+Policy with `form-action 'self'` and `base-uri 'none'`, in addition to the
+existing frame and script restrictions. These directives constrain where
+secure login/edit forms can submit and prevent injected HTML `<base>` tags
+from rewriting relative URLs. Regression tests cover successful and rejected
+secure responses. This is browser defense in depth, not a replacement for
+CSRF validation or HTML escaping; the vulnerable teaching routes remain
+intentionally unchanged.
+
 **Sensitive-response caching:** The secure login, private-note, and note-edit routes
 return `Cache-Control: no-store` (including unsuccessful responses), reducing
 the risk of credentials or private notes being retained in browser or
