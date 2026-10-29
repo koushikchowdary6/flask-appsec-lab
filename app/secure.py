@@ -194,7 +194,9 @@ def edit_note(note_id: int):
         # DELETE and UPDATE share one SQLite transaction. Bind the nonce to
         # the intended note as well as the user: a valid form for note A must
         # never authorize an edit to another note owned by the same user.
-        # Concurrent/replayed requests cannot both consume the same token.\n        # Bound both ends of the validity window: a clock-skewed or corrupt\n        # future timestamp must not make a token valid indefinitely.
+        # Concurrent/replayed requests cannot both consume the same token.
+        # Bound both ends of the validity window: a clock-skewed or corrupt
+        # future timestamp must not make a token valid indefinitely.
         now = int(time.time())
         consumed = db.execute(
             "DELETE FROM secure_csrf_tokens "
