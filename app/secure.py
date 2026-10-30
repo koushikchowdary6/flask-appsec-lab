@@ -56,7 +56,10 @@ def reject_cross_origin_form_posts():
         expected = _parse_origin(request.host_url.rstrip("/"))
         if expected is None or _parse_origin(origin) != expected:
             return "Cross-origin secure form submission rejected", 403
-    if request.headers.get("Sec-Fetch-Site") in {"cross-site", "same-site"}:
+    site = request.headers.get("Sec-Fetch-Site")
+    # Browser Fetch Metadata has a closed vocabulary. Combined, unknown or
+    # case-altered values are ambiguous and must not bypass this CSRF layer.
+    if site is not None and site not in {"same-origin", "none"}:
         return "Cross-origin secure form submission rejected", 403
     return None
 
