@@ -58,6 +58,18 @@ string before URL parameter parsing and returns HTTP 414 above 4 KiB. This
 limits reflection and parsing work for oversized requests; the intentionally
 vulnerable `/vuln/search` remains unchanged for side-by-side comparison.
 
+**Cross-origin form-post checks:** The secure blueprint rejects browser POSTs
+whose `Origin` differs from the request's scheme, host and effective port,
+or whose `Sec-Fetch-Site` indicates a cross-site or same-site (but
+cross-origin) request. This applies to login as well as note edits and rejects
+malformed or opaque (`null`) origins. Same-origin browser forms and legacy
+clients without these headers remain usable. The checks are **defense in
+depth, not full login-CSRF protection**: non-browser clients can omit or forge
+these headers, and a browser that sends neither header is not covered.
+The note-edit endpoint still requires its independent, database-backed,
+one-time CSRF token. Regression tests ensure rejected cross-origin requests
+do not authenticate users or consume legitimate edit tokens.
+
 **Secure form-target hardening:** The secure routes send a Content Security
 Policy with `form-action 'self'` and `base-uri 'none'`, in addition to the
 existing frame and script restrictions. These directives constrain where

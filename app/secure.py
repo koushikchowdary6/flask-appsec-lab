@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import secrets
 import time
+from urllib.parse import urlsplit
 
 from flask import Blueprint, request, session
 from markupsafe import escape
@@ -16,6 +17,49 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from app import get_db
 
 bp = Blueprint("secure", __name__, url_prefix="/secure")
+
+
+def _parse_origin(value: str):
+    """Canonicalize an HTTP Origin, rejecting paths, credentials and malformed ports."""
+    try:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path
+            or parsed.query
+            or parsed.fragment
+        ):
+            return None
+        port = parsed.port
+    except ValueError:
+        return None
+    if port is None:
+        port = 443 if parsed.scheme == "https" else 80
+    return parsed.scheme, parsed.hostname.lower(), port
+
+
+@bp.before_request
+def reject_cross_origin_form_posts():
+    """Browser defense in depth for the secure lab's state-changing forms.
+
+    The Origin and Fetch Metadata headers help reject cross-site browser
+    submissions even at the login endpoint. They are not authentication and
+    cannot replace the note-edit CSRF token: non-browser clients can omit them.
+    """
+    if request.method != "POST":
+        return None
+    origin = request.headers.get("Origin")
+    if origin is not None:
+        expected = _parse_origin(request.host_url.rstrip("/"))
+        if expected is None or _parse_origin(origin) != expected:
+            return "Cross-origin secure form submission rejected", 403
+    if request.headers.get("Sec-Fetch-Site") in {"cross-site", "same-site"}:
+        return "Cross-origin secure form submission rejected", 403
+    return None
+
 
 # Limit both multipart/form payload size and stored note text on the hardened route.
 # The vulnerable route is intentionally left unchanged for side-by-side study.
