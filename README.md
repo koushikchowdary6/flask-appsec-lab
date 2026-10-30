@@ -70,6 +70,13 @@ The note-edit endpoint still requires its independent, database-backed,
 one-time CSRF token. Regression tests ensure rejected cross-origin requests
 do not authenticate users or consume legitimate edit tokens.
 
+**Strict Fetch Metadata handling:** When `Sec-Fetch-Site` is present on a
+secure POST, only the standard `same-origin` and `none` values are
+accepted. `same-site`, `cross-site`, unknown, case-altered, and combined
+values are rejected rather than silently bypassing the browser-origin check.
+Legacy requests with no Fetch Metadata remain supported; this is defense in
+depth and cannot authenticate a non-browser client.
+
 **Secure form-target hardening:** The secure routes send a Content Security
 Policy with `form-action 'self'` and `base-uri 'none'`, in addition to the
 existing frame and script restrictions. These directives constrain where
