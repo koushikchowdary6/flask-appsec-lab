@@ -18,6 +18,11 @@ import pytest
     {"Origin": "http://localhost:invalid"},
     {"Sec-Fetch-Site": "cross-site"},
     {"Sec-Fetch-Site": "same-site"},
+    {"Sec-Fetch-Site": "same-origin, cross-site"},
+    {"Sec-Fetch-Site": "cross-site, same-origin"},
+    {"Sec-Fetch-Site": "CROSS-SITE"},
+    {"Sec-Fetch-Site": "unexpected"},
+    {"Sec-Fetch-Site": ""},
     {"Origin": "http://localhost", "Sec-Fetch-Site": "cross-site"},
 ])
 def test_cross_origin_secure_login_rejected_without_creating_session(client, headers):
@@ -35,6 +40,7 @@ def test_cross_origin_secure_login_rejected_without_creating_session(client, hea
     {},
     {"Origin": "http://localhost"},
     {"Origin": "http://LOCALHOST:80", "Sec-Fetch-Site": "same-origin"},
+    {"Sec-Fetch-Site": "none"},
 ])
 def test_same_origin_and_legacy_login_remain_usable(client, headers):
     response = client.post(
@@ -46,7 +52,12 @@ def test_same_origin_and_legacy_login_remain_usable(client, headers):
     assert client.get("/secure/note/2").status_code == 200
 
 
-def test_cross_origin_edit_does_not_consume_valid_csrf_token(client):
+@pytest.mark.parametrize("rejected_headers", [
+    {"Origin": "https://attacker.example"},
+    {"Sec-Fetch-Site": "same-origin, cross-site"},
+    {"Sec-Fetch-Site": "unexpected"},
+])
+def test_cross_origin_edit_does_not_consume_valid_csrf_token(client, rejected_headers):
     assert client.post(
         "/secure/login",
         data={"username": "alice", "password": "alice-password-1"},
@@ -57,7 +68,7 @@ def test_cross_origin_edit_does_not_consume_valid_csrf_token(client):
     rejected = client.post(
         "/secure/note/2/edit",
         data={"csrf_token": token, "body": "cross-site overwrite"},
-        headers={"Origin": "https://attacker.example"},
+        headers=rejected_headers,
     )
     assert rejected.status_code == 403
     assert client.get("/secure/note/2").get_data(as_text=True) == (
