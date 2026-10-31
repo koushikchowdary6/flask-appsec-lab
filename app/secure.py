@@ -20,9 +20,25 @@ bp = Blueprint("secure", __name__, url_prefix="/secure")
 
 
 def _parse_origin(value: str):
-    """Canonicalize an HTTP Origin, rejecting paths, credentials and malformed ports."""
+    """Canonicalize an HTTP Origin without accepting parser-normalized controls.
+
+    urllib.parse strips tabs/newlines and leading C0 controls before parsing.
+    HTTP Origin values must be serialized ASCII origins, not arbitrary URLs:
+    reject malformed raw headers *before* urlsplit can normalize them.
+    """
+    if (
+        not isinstance(value, str)
+        or not value
+        or any(not (0x21 <= ord(char) <= 0x7E) for char in value)
+        or "?" in value
+        or "#" in value
+        or "\\" in value
+    ):
+        return None
     try:
         parsed = urlsplit(value)
+        if parsed.netloc.endswith(":"):
+            return None
         if (
             parsed.scheme not in {"http", "https"}
             or not parsed.hostname
