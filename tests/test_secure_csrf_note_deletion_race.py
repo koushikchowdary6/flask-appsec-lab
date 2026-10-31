@@ -53,14 +53,23 @@ def test_deleted_note_does_not_report_success_or_burn_csrf_token(client, monkeyp
     ).group(1)
 
     original_get_db = secure_module.get_db
-    proxy = _DeleteNoteAfterAuthorizationLookup(original_get_db())
-    monkeypatch.setattr(secure_module, "get_db", lambda: proxy)
+    proxies = {}
+
+    def get_race_db():
+        # Flask's application/request context exists only during the POST.
+        if "connection" not in proxies:
+            proxies["connection"] = _DeleteNoteAfterAuthorizationLookup(
+                original_get_db()
+            )
+        return proxies["connection"]
+
+    monkeypatch.setattr(secure_module, "get_db", get_race_db)
 
     response = client.post(
         "/secure/note/2/edit",
         data={"csrf_token": token, "body": "must not be written"},
     )
-    assert proxy.did_delete
+    assert proxies["connection"].did_delete
     assert response.status_code == 404
     assert response.get_data(as_text=True) == "No such note"
 
