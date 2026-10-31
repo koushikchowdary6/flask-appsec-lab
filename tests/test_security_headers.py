@@ -38,8 +38,24 @@ def test_secure_login_and_private_notes_are_not_cached(client):
         assert "no-store" in response.headers["Cache-Control"]
 
 
-def test_public_search_and_vulnerable_demo_do_not_gain_cache_policy(client):
-    assert "Cache-Control" not in client.get("/secure/search?q=hello").headers
+def test_reflected_search_and_secure_errors_are_not_cached(client):
+    # Public search can reflect sensitive strings inadvertently pasted into a
+    # query URL. Both successful and rejected secure responses must be no-store.
+    for response in (
+        client.get("/secure/search?q=private-identifier-123"),
+        client.get("/secure/search?q=" + "x" * 5000),  # HTTP 414
+        client.post("/secure/login", data={
+            "username": "nobody", "password": "wrong"
+        }),  # HTTP 401
+        client.post("/secure/login", data={
+            "username": "alice", "password": "alice-password-1"
+        }, headers={"Origin": "https://attacker.example"}),  # HTTP 403
+    ):
+        assert "no-store" in response.headers["Cache-Control"]
+
+
+def test_intentionally_vulnerable_demo_does_not_gain_cache_policy(client):
+    assert "Cache-Control" not in client.get("/vuln/search?q=hello").headers
     assert "Cache-Control" not in client.get("/vuln/login").headers
     assert "Cache-Control" not in client.get("/vuln/note/1").headers
 

@@ -86,12 +86,15 @@ secure responses. This is browser defense in depth, not a replacement for
 CSRF validation or HTML escaping; the vulnerable teaching routes remain
 intentionally unchanged.
 
-**Sensitive-response caching:** The secure login, private-note, and note-edit routes
-return `Cache-Control: no-store` (including unsuccessful responses), reducing
-the risk of credentials or private notes being retained in browser or
-intermediary HTTP caches. The public search endpoint and intentionally
-vulnerable demonstration routes remain unchanged for comparison. This is
-defense in depth, not a substitute for proper authorization.
+**Sensitive-response caching:** Every `/secure` route now returns
+`Cache-Control: no-store`, including reflected search results, private notes,
+login forms, and rejected requests. Search query values may contain
+identifiers or secrets inadvertently pasted into a URL; no-store reduces
+retention of response bodies in browser and intermediary HTTP caches.
+It does **not** erase query URLs from browser history or server/proxy logs.
+The intentionally vulnerable `/vuln` demonstration routes retain their
+original caching behavior for comparison. This is defense in depth, not a
+substitute for proper authorization or safe handling of sensitive query data.
 
 **Password storage in the paired lab:** The secure login verifies a salted
 Werkzeug password hash rather than comparing a plaintext password in SQL.
