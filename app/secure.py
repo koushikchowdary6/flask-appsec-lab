@@ -254,10 +254,17 @@ def edit_note(note_id: int):
         if consumed != 1:
             db.rollback()
             return "Invalid CSRF token", 403
-        db.execute(
+        updated = db.execute(
             "UPDATE notes SET body = ? WHERE id = ? AND owner_id = ?",
             (body, note_id, owner_id),
-        )
+        ).rowcount
+        if updated != 1:
+            # The note may have been deleted or reassigned after the earlier
+            # ownership lookup. Do not report success or burn a valid CSRF
+            # token unless the authorized write actually affected one row.
+            # Rolling back restores the token consumed in this transaction.
+            db.rollback()
+            return "No such note", 404
         db.commit()
         session.pop("secure_csrf_token", None)
         return "Note updated"
