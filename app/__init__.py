@@ -132,6 +132,12 @@ def create_app() -> Flask:
     # Set FLASK_SECRET_KEY to a high-entropy value when sessions must survive
     # restarts. The intentionally vulnerable routes remain local-only.
     app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_urlsafe(32)
+    # The secure Origin check compares against request.host_url. If arbitrary
+    # Host headers are accepted, an attacker-controlled Host and matching
+    # Origin can masquerade as same-origin. This is a localhost-only lab:
+    # trust only local names, including both loopback address families.
+    # Flask 3.1 validates TRUSTED_HOSTS during routing, before login handlers.
+    app.config["TRUSTED_HOSTS"] = ["localhost", "127.0.0.1", "::1"]
 
     if not DB_PATH.exists():
         init_db()
