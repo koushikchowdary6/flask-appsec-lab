@@ -122,7 +122,11 @@ and signed-cookie integrity. Without `FLASK_SECRET_KEY`, each app instance
 creates a fresh cryptographically random signing key instead of using a
 publicly known development fallback (which would allow session forgery).
 Set a strong, private `FLASK_SECRET_KEY` in the environment when sessions
-must persist across restarts or multiple workers. Otherwise, restarting the
+must persist across restarts or multiple workers. Configured nonempty keys
+shorter than 32 characters (or made entirely of whitespace) are rejected at
+startup instead of weakening signed-cookie integrity. Length alone does not
+guarantee entropy: generate and store a cryptographically random secret.
+Otherwise, restarting the
 local lab invalidates existing sessions. This does **not** make the intentionally
 vulnerable routes safe to deploy.
 

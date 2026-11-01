@@ -131,7 +131,15 @@ def create_app() -> Flask:
     # Use a fresh secret per app instance unless the operator supplies one.
     # Set FLASK_SECRET_KEY to a high-entropy value when sessions must survive
     # restarts. The intentionally vulnerable routes remain local-only.
-    app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_urlsafe(32)
+    configured_secret = os.environ.get("FLASK_SECRET_KEY")
+    # A short operator-supplied key is just as forgeable as a hardcoded
+    # development fallback. Reject it instead of silently weakening secure
+    # session integrity. Length is a floor, not proof of randomness.
+    if configured_secret and (
+        len(configured_secret) < 32 or not configured_secret.strip()
+    ):
+        raise ValueError("FLASK_SECRET_KEY must contain at least 32 nonblank characters")
+    app.secret_key = configured_secret or secrets.token_urlsafe(32)
     # The secure Origin check compares against request.host_url. If arbitrary
     # Host headers are accepted, an attacker-controlled Host and matching
     # Origin can masquerade as same-origin. This is a localhost-only lab:
