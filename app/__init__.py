@@ -135,10 +135,20 @@ def create_app() -> Flask:
     # A short operator-supplied key is just as forgeable as a hardcoded
     # development fallback. Reject it instead of silently weakening secure
     # session integrity. Length is a floor, not proof of randomness.
+    # A 32-character secret made by repeating a tiny pattern is still easy
+    # to guess and forge. This catches obvious configuration mistakes, not
+    # arbitrary low-entropy passwords; use a generated random secret.
+    short_period = bool(configured_secret) and any(
+        len(configured_secret) % period == 0
+        and configured_secret == configured_secret[:period] * (len(configured_secret) // period)
+        for period in range(1, min(8, len(configured_secret)) + 1)
+    )
     if configured_secret and (
-        len(configured_secret) < 32 or not configured_secret.strip()
+        len(configured_secret) < 32 or not configured_secret.strip() or short_period
     ):
-        raise ValueError("FLASK_SECRET_KEY must contain at least 32 nonblank characters")
+        raise ValueError(
+            "FLASK_SECRET_KEY must contain at least 32 nonblank, non-periodic characters"
+        )
     app.secret_key = configured_secret or secrets.token_urlsafe(32)
     # The secure Origin check compares against request.host_url. If arbitrary
     # Host headers are accepted, an attacker-controlled Host and matching

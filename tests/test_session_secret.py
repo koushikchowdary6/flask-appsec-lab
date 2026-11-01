@@ -50,7 +50,10 @@ def test_cookie_from_one_default_app_cannot_authorize_another(monkeypatch, clien
 def test_short_operator_secret_fails_closed_at_startup(monkeypatch, client):
     import pytest
 
-    for weak_secret in ("x", "dev-only-not-for-production", " " * 40):
+    for weak_secret in (
+        "x", "dev-only-not-for-production", " " * 40,
+        "x" * 32, "Ab3!" * 8, "12345678" * 4,
+    ):
         monkeypatch.setenv("FLASK_SECRET_KEY", weak_secret)
         with pytest.raises(ValueError, match="FLASK_SECRET_KEY"):
             create_app()
