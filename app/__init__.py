@@ -135,13 +135,14 @@ def create_app() -> Flask:
     # A short operator-supplied key is just as forgeable as a hardcoded
     # development fallback. Reject it instead of silently weakening secure
     # session integrity. Length is a floor, not proof of randomness.
-    # A 32-character secret made by repeating a tiny pattern is still easy
-    # to guess and forge. This catches obvious configuration mistakes, not
-    # arbitrary low-entropy passwords; use a generated random secret.
+    # A long-looking key made by repeating a shorter string remains easy to
+    # guess. Inspect periods up to 32 characters (including a 16-character
+    # block repeated twice in a 32-character key), with bounded work for
+    # unexpectedly large environment values. This cannot prove entropy.
     short_period = bool(configured_secret) and any(
         len(configured_secret) % period == 0
         and configured_secret == configured_secret[:period] * (len(configured_secret) // period)
-        for period in range(1, min(8, len(configured_secret)) + 1)
+        for period in range(1, min(32, len(configured_secret) // 2) + 1)
     )
     if configured_secret and (
         len(configured_secret) < 32 or not configured_secret.strip() or short_period
