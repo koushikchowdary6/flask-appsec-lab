@@ -45,3 +45,19 @@ def test_cookie_from_one_default_app_cannot_authorize_another(monkeypatch, clien
     with second.test_client() as replay:
         replay.set_cookie("session", signed_cookie.value)
         assert replay.get("/secure/note/2").status_code == 401
+
+
+def test_short_operator_secret_fails_closed_at_startup(monkeypatch, client):
+    import pytest
+
+    for weak_secret in ("x", "dev-only-not-for-production", " " * 40):
+        monkeypatch.setenv("FLASK_SECRET_KEY", weak_secret)
+        with pytest.raises(ValueError, match="FLASK_SECRET_KEY"):
+            create_app()
+
+
+def test_minimum_length_operator_secret_is_accepted(monkeypatch, client):
+    secret = "aB3!cD4@eF5#gH6$iJ7%kL8^mN9&pQ0*"
+    assert len(secret) == 32
+    monkeypatch.setenv("FLASK_SECRET_KEY", secret)
+    assert create_app().secret_key == secret
