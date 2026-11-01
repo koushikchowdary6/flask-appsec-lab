@@ -58,6 +58,15 @@ string before URL parameter parsing and returns HTTP 414 above 4 KiB. This
 limits reflection and parsing work for oversized requests; the intentionally
 vulnerable `/vuln/search` remains unchanged for side-by-side comparison.
 
+**Trusted Host boundary:** Flask 3.1's `TRUSTED_HOSTS` setting now limits
+requests to `localhost`, `127.0.0.1`, or `::1` (with optional ports).
+Without a Host allowlist, an attacker-supplied `Host` paired with a matching
+`Origin` could redefine the origin against which the secure login compares
+headers. Untrusted hosts receive HTTP 400 before a login can create a session;
+regression tests cover spoofed hosts and legitimate loopback traffic. This
+reinforces the **localhost-only** requirement; it does not make the intentionally
+vulnerable routes safe to expose publicly.
+
 **Cross-origin form-post checks:** The secure blueprint rejects browser POSTs
 whose `Origin` differs from the request's scheme, host and effective port,
 or whose `Sec-Fetch-Site` indicates a cross-site or same-site (but
