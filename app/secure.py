@@ -92,6 +92,9 @@ MAX_SQLITE_ROW_ID = (1 << 63) - 1
 # Abandoned edit forms expire; the database, not a replayable signed cookie,
 # determines whether a token is still valid and unused.
 CSRF_TOKEN_TTL_SECONDS = 24 * 60 * 60
+# A bounded set of per-note tokens lets users edit independent forms in
+# separate browser tabs without invalidating the other note's CSRF defense.
+MAX_ACTIVE_NOTE_FORMS = 16
 
 
 def _csrf_digest(token: str) -> str:
@@ -245,7 +248,9 @@ def edit_note(note_id: int):
             return "Invalid CSRF token", 403
         if len(bodies) != 1:
             return "Ambiguous or missing note body", 400
-        expected = session.get("secure_csrf_token")
+        active_tokens = session.get("secure_csrf_tokens")
+        expected = (active_tokens.get(str(note_id))
+                    if isinstance(active_tokens, dict) else None)
         supplied = tokens[0]
         if (
             not isinstance(expected, str)
@@ -284,10 +289,25 @@ def edit_note(note_id: int):
             db.rollback()
             return "No such note", 404
         db.commit()
-        session.pop("secure_csrf_token", None)
+        # Only this note's form is consumed; another open note form remains
+        # valid until its own one-time database nonce is used or expires.
+        remaining = dict(active_tokens)
+        remaining.pop(str(note_id), None)
+        if remaining:
+            session["secure_csrf_tokens"] = remaining
+            session["secure_csrf_order"] = [
+                key for key in session.get("secure_csrf_order", [])
+                if key != str(note_id) and key in remaining
+            ]
+        else:
+            session.pop("secure_csrf_tokens", None)
+            session.pop("secure_csrf_order", None)
         return "Note updated"
 
-    token = session.get("secure_csrf_token")
+    active_tokens = session.get("secure_csrf_tokens")
+    if not isinstance(active_tokens, dict):
+        active_tokens = {}
+    token = active_tokens.get(str(note_id))
     now = int(time.time())
     valid = (
         isinstance(token, str)
@@ -304,13 +324,35 @@ def edit_note(note_id: int):
             "DELETE FROM secure_csrf_tokens WHERE created_at < ? OR created_at > ?",
             (now - CSRF_TOKEN_TTL_SECONDS, now),
         )
+        # Flask serializes signed-cookie dictionaries with sorted keys, so
+        # mapping insertion order is NOT stable across requests. Store the
+        # actual issuance order as a list and evict the oldest active form.
+        # Revoke the evicted nonce in SQLite too: replaying an older signed
+        # cookie must not resurrect it.
+        active_tokens = dict(active_tokens)
+        stored_order = session.get("secure_csrf_order")
+        active_order = (
+            [key for key in stored_order if key in active_tokens]
+            if isinstance(stored_order, list) else []
+        )
+        active_order.extend(key for key in active_tokens if key not in active_order)
+        if len(active_tokens) >= MAX_ACTIVE_NOTE_FORMS:
+            oldest_note = active_order.pop(0)
+            old_token = active_tokens.pop(oldest_note)
+            db.execute(
+                "DELETE FROM secure_csrf_tokens WHERE token_digest = ? AND user_id = ?",
+                (_csrf_digest(old_token), owner_id),
+            )
         db.execute(
             "INSERT INTO secure_csrf_tokens (token_digest, user_id, note_id, created_at) "
             "VALUES (?, ?, ?, ?)",
             (_csrf_digest(token), owner_id, note_id, now),
         )
         db.commit()
-        session["secure_csrf_token"] = token
+        active_tokens[str(note_id)] = token
+        active_order.append(str(note_id))
+        session["secure_csrf_tokens"] = active_tokens
+        session["secure_csrf_order"] = active_order
     return (
         f'<form method="post" action="/secure/note/{note_id}/edit">'
         f'<input type="hidden" name="csrf_token" value="{escape(token)}">'
