@@ -105,6 +105,16 @@ The intentionally vulnerable `/vuln` demonstration routes retain their
 original caching behavior for comparison. This is defense in depth, not a
 substitute for proper authorization or safe handling of sensitive query data.
 
+**Session identity reuse:** Secure note reads and edits now recheck the
+signed cookie's user ID and username against the current account record.
+A deleted account, renamed account, or numeric ID reassigned to a different
+username cannot keep accessing the previous account's notes using a stale
+cookie. Invalid session ID types and out-of-range SQLite identifiers fail
+closed. This is **not full server-side session revocation**: deleting and
+recreating the same ID and username, or stealing an active valid cookie,
+requires stronger server-side session versioning to address. The intentionally
+vulnerable teaching routes remain unchanged.
+
 **Password storage in the paired lab:** The secure login verifies a salted
 Werkzeug password hash rather than comparing a plaintext password in SQL.
 For the isolated SQL-injection demonstration only, the same local demo database
