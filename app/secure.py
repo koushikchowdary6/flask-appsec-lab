@@ -295,8 +295,13 @@ def edit_note(note_id: int):
         remaining.pop(str(note_id), None)
         if remaining:
             session["secure_csrf_tokens"] = remaining
+            session["secure_csrf_order"] = [
+                key for key in session.get("secure_csrf_order", [])
+                if key != str(note_id) and key in remaining
+            ]
         else:
             session.pop("secure_csrf_tokens", None)
+            session.pop("secure_csrf_order", None)
         return "Note updated"
 
     active_tokens = session.get("secure_csrf_tokens")
@@ -319,13 +324,20 @@ def edit_note(note_id: int):
             "DELETE FROM secure_csrf_tokens WHERE created_at < ? OR created_at > ?",
             (now - CSRF_TOKEN_TTL_SECONDS, now),
         )
-        # Flask's signed session is cookie-backed. Keep its token map bounded
-        # and revoke an evicted nonce server-side so an old cookie cannot
-        # restore it. Dict insertion order gives predictable oldest-first
-        # eviction without discarding forms for unrelated notes by default.
+        # Flask serializes signed-cookie dictionaries with sorted keys, so
+        # mapping insertion order is NOT stable across requests. Store the
+        # actual issuance order as a list and evict the oldest active form.
+        # Revoke the evicted nonce in SQLite too: replaying an older signed
+        # cookie must not resurrect it.
         active_tokens = dict(active_tokens)
+        stored_order = session.get("secure_csrf_order")
+        active_order = (
+            [key for key in stored_order if key in active_tokens]
+            if isinstance(stored_order, list) else []
+        )
+        active_order.extend(key for key in active_tokens if key not in active_order)
         if len(active_tokens) >= MAX_ACTIVE_NOTE_FORMS:
-            oldest_note = next(iter(active_tokens))
+            oldest_note = active_order.pop(0)
             old_token = active_tokens.pop(oldest_note)
             db.execute(
                 "DELETE FROM secure_csrf_tokens WHERE token_digest = ? AND user_id = ?",
@@ -338,7 +350,9 @@ def edit_note(note_id: int):
         )
         db.commit()
         active_tokens[str(note_id)] = token
+        active_order.append(str(note_id))
         session["secure_csrf_tokens"] = active_tokens
+        session["secure_csrf_order"] = active_order
     return (
         f'<form method="post" action="/secure/note/{note_id}/edit">'
         f'<input type="hidden" name="csrf_token" value="{escape(token)}">'
