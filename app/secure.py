@@ -191,17 +191,40 @@ def search() -> str:
     return f"<p>Results for: {escape(q)}</p>"
 
 
+def _authenticated_user_id(db):
+    """Recheck the account identity before trusting a signed session cookie.
+
+    An old cookie must not grant access if its user ID is deleted and later
+    reused by a different account. This is an identity-reuse guard, not
+    full session revocation for an account recreated with identical identity.
+    """
+    user_id = session.get("secure_user_id")
+    username = session.get("secure_username")
+    if (
+        type(user_id) is not int
+        or not 1 <= user_id <= MAX_SQLITE_ROW_ID
+        or not isinstance(username, str)
+        or not username
+    ):
+        return None
+    account = db.execute(
+        "SELECT username FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    return user_id if account is not None and account["username"] == username else None
+
+
 @bp.route("/note/<int:note_id>")
 def note(note_id: int) -> str:
     """FIX for IDOR: scope the query to the caller's own user id."""
-    if "secure_user_id" not in session:
+    db = get_db()
+    owner_id = _authenticated_user_id(db)
+    if owner_id is None:
         return "Please log in first", 401
     if note_id > MAX_SQLITE_ROW_ID:
         return "No such note", 404
-    db = get_db()
     row = db.execute(
         "SELECT body FROM notes WHERE id = ? AND owner_id = ?",
-        (note_id, session["secure_user_id"]),
+        (note_id, owner_id),
     ).fetchone()
     if row is None:
         return "No such note", 404
@@ -223,13 +246,12 @@ def edit_note(note_id: int):
         # attacker-controlled body can be buffered in full.
         request.max_content_length = MAX_SECURE_NOTE_BYTES
 
-    if "secure_user_id" not in session:
+    db = get_db()
+    owner_id = _authenticated_user_id(db)
+    if owner_id is None:
         return "Please log in first", 401
     if note_id > MAX_SQLITE_ROW_ID:
         return "No such note", 404
-
-    db = get_db()
-    owner_id = session["secure_user_id"]
     row = db.execute(
         "SELECT body FROM notes WHERE id = ? AND owner_id = ?",
         (note_id, owner_id),
